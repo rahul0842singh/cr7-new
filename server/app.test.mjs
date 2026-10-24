@@ -92,3 +92,13 @@ test('cross-origin frontend can preflight and authenticate with a bearer session
   assert.equal((await fetch(app.url+'/api/admin/session',{headers:{Origin:origin,Authorization:'Bearer invalid'}})).status,401);
  }finally{await app.close();}
 });
+
+test('local frontend served on port 3001 can reach the hosted API',async()=>{
+ const app=await start();
+ try {
+  for(const origin of ['http://127.0.0.1:3001','http://localhost:3001']){
+   const response=await fetch(app.url+'/api/admin/login',{method:'OPTIONS',headers:{Origin:origin,'Access-Control-Request-Method':'POST','Access-Control-Request-Headers':'content-type'}});
+   assert.equal(response.status,204);assert.equal(response.headers.get('access-control-allow-origin'),origin);
+  }
+ }finally{await app.close();}
+});

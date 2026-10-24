@@ -32,7 +32,7 @@ export async function lookupLocation(ip) {
     return { status: 'located', city: clean(data.city,100), region: clean(data.region,100), country: clean(data.country,100) };
   } catch { return { status: 'unavailable', city: '', region: '', country: '' }; }
 }
-export async function createApplication({ allowedOrigins = (process.env.FRONTEND_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174').split(',').map(value => value.trim()).filter(Boolean), mongoUri = process.env.MONGODB_URI, databaseName = process.env.MONGODB_DB, password = process.env.ADMIN_PASSWORD, secure = process.env.NODE_ENV === 'production', trustedProxies = (process.env.TRUSTED_PROXY_IPS || '').split(',').filter(Boolean), geo = lookupLocation } = {}) {
+export async function createApplication({ allowedOrigins = (process.env.FRONTEND_ORIGINS || 'http://localhost:3001,http://127.0.0.1:3001,http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174').split(',').map(value => value.trim()).filter(Boolean), mongoUri = process.env.MONGODB_URI, databaseName = process.env.MONGODB_DB, password = process.env.ADMIN_PASSWORD, secure = process.env.NODE_ENV === 'production', trustedProxies = (process.env.TRUSTED_PROXY_IPS || '').split(',').filter(Boolean), geo = lookupLocation } = {}) {
   if (!password || password.length < 16) throw new Error('Set ADMIN_PASSWORD (at least 16 characters). Run npm run setup:admin.');
   const store = await openReportStore({mongoUri,databaseName});
   const sessions = new Map(), limits = new Map(), cache = new Map(), pending = new Set();
@@ -134,5 +134,6 @@ export async function createApplication({ allowedOrigins = (process.env.FRONTEND
   });
   return {server,async close(){ if(server.listening) await new Promise(resolve=>server.close(resolve)); await Promise.allSettled([...pending]); await store.close(); }};
 }
+
 
 

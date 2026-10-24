@@ -34,7 +34,7 @@ Official Atlas connection guidance: https://www.mongodb.com/docs/drivers/node/cu
 
 The frontend can call this backend directly using its public HTTPS URL. The existing frontend has `VITE_API_URL=https://cr7-new.onrender.com`. Admin login returns a short-lived session token; the frontend keeps it in sessionStorage and sends `Authorization: Bearer <token>` on admin API requests. This avoids a dependency on third-party cookies. Existing same-origin cookie authentication is also supported.
 
-Set `FRONTEND_ORIGINS` on the backend to a comma-separated list of exact frontend origins (scheme, hostname, and port; no trailing slash). Unknown browser origins are rejected. When unset, localhost and 127.0.0.1 on ports 5173 and 5174 are allowed for development. Before public frontend launch, set this explicitly to your actual domain(s), optionally retaining development origins if required. Preflight requests support Content-Type and Authorization headers. No wildcard origins or cross-site credential cookies are used.
+Set `FRONTEND_ORIGINS` on the backend to a comma-separated list of exact frontend origins (scheme, hostname, and port; no trailing slash). Unknown browser origins are rejected. When unset, localhost and 127.0.0.1 on ports 3001, 5173 and 5174 are allowed for development. Before public frontend launch, set this explicitly to your actual domain(s), optionally retaining development origins if required. Preflight requests support Content-Type and Authorization headers. No wildcard origins or cross-site credential cookies are used.
 
 The React frontend is configured independently; changing VITE_API_URL requires restarting Vite or rebuilding a hosted frontend. You can alternatively keep using a same-origin `/api` proxy. Direct requests to the hosted backend allow it to see the visitor connection through the hosting network; configure trusted proxy IPs for accurate visitor location as explained below.
 
@@ -71,4 +71,5 @@ Public IP locations are estimated through HTTPS requests to https://ipwho.is/ wi
 Run `npm test`. The suite checks authentication, persistence, retry deduplication, reporting totals, filters, CSV, pagination and IP handling. It uses `TEST_MONGODB_URI`, then `MONGODB_URI`, or a temporary local MongoDB if neither is configured. The temporary local option can download a MongoDB binary on its first run.
 
 Every test uses an isolated, randomly named `cr7_test_...` database that is removed afterward. Tests never write reports into `cr7.payment_reports`. The test database user needs permission to create and remove these isolated test databases.
+
 
