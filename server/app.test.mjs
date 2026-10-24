@@ -72,3 +72,23 @@ test('provider failures do not lose reports; pagination and login throttling wor
 });
 
 
+
+test('cross-origin frontend can preflight and authenticate with a bearer session',async()=>{
+ const origin='http://localhost:5173';
+ const app=await start({allowedOrigins:[origin]});
+ try{
+  const preflight=await fetch(app.url+'/api/admin/reports',{method:'OPTIONS',headers:{Origin:origin,'Access-Control-Request-Method':'GET','Access-Control-Request-Headers':'authorization'}});
+  assert.equal(preflight.status,204);assert.equal(preflight.headers.get('access-control-allow-origin'),origin);assert.match(preflight.headers.get('access-control-allow-headers'),/Authorization/);
+  const blocked=await fetch(app.url+'/api/admin/reports',{method:'OPTIONS',headers:{Origin:'https://not-allowed.example'}});assert.equal(blocked.status,403);assert.equal(blocked.headers.get('access-control-allow-origin'),null);
+  const loginResponse=await post(app,'/api/admin/login',{password},{Origin:origin,'sec-fetch-site':'cross-site'});
+  assert.equal(loginResponse.status,200);assert.equal(loginResponse.headers.get('access-control-allow-origin'),origin);
+  const {token}=await loginResponse.json();assert.match(token,/^[a-f0-9]{64}$/);
+  const headers={Origin:origin,Authorization:`Bearer ${token}`};
+  assert.equal((await fetch(app.url+'/api/admin/session',{headers})).status,200);
+  const reports=await fetch(app.url+'/api/admin/reports',{headers});assert.equal(reports.status,200);assert.equal((await reports.json()).summary.totalClicks,0);
+  const csv=await fetch(app.url+'/api/admin/export',{headers});assert.equal(csv.status,200);
+  assert.equal((await post(app,'/api/admin/logout',{},headers)).status,200);
+  assert.equal((await fetch(app.url+'/api/admin/session',{headers})).status,401);
+  assert.equal((await fetch(app.url+'/api/admin/session',{headers:{Origin:origin,Authorization:'Bearer invalid'}})).status,401);
+ }finally{await app.close();}
+});

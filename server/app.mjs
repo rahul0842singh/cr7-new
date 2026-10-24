@@ -32,7 +32,7 @@ export async function lookupLocation(ip) {
     return { status: 'located', city: clean(data.city,100), region: clean(data.region,100), country: clean(data.country,100) };
   } catch { return { status: 'unavailable', city: '', region: '', country: '' }; }
 }
-export async function createApplication({ mongoUri = process.env.MONGODB_URI, databaseName = process.env.MONGODB_DB, password = process.env.ADMIN_PASSWORD, secure = process.env.NODE_ENV === 'production', trustedProxies = (process.env.TRUSTED_PROXY_IPS || '').split(',').filter(Boolean), geo = lookupLocation } = {}) {
+export async function createApplication({ allowedOrigins = (process.env.FRONTEND_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174').split(',').map(value => value.trim()).filter(Boolean), mongoUri = process.env.MONGODB_URI, databaseName = process.env.MONGODB_DB, password = process.env.ADMIN_PASSWORD, secure = process.env.NODE_ENV === 'production', trustedProxies = (process.env.TRUSTED_PROXY_IPS || '').split(',').filter(Boolean), geo = lookupLocation } = {}) {
   if (!password || password.length < 16) throw new Error('Set ADMIN_PASSWORD (at least 16 characters). Run npm run setup:admin.');
   const store = await openReportStore({mongoUri,databaseName});
   const sessions = new Map(), limits = new Map(), cache = new Map(), pending = new Set();
@@ -52,18 +52,28 @@ export async function createApplication({ mongoUri = process.env.MONGODB_URI, da
     try { return JSON.parse(body); } catch { throw Object.assign(new Error('Invalid JSON'),{status:400}); }
   };
   const cookie = req => /(?:^|;\s*)cr7_admin=([a-f0-9]{64})(?:;|$)/.exec(req.headers.cookie || '')?.[1];
-  const authorized = req => { const token = cookie(req); const expiry = sessions.get(token); if (expiry && expiry > Date.now()) return true; sessions.delete(token); return false; };
+  const sessionToken = req => /^Bearer ([a-f0-9]{64})$/.exec(req.headers.authorization || "")?.[1] || cookie(req);
+  const authorized = req => { const token = sessionToken(req); const expiry = sessions.get(token); if (expiry && expiry > Date.now()) return true; sessions.delete(token); return false; };
   const setCookie = (res, token, age) => res.setHeader('Set-Cookie', `cr7_admin=${token}; HttpOnly; SameSite=Strict; Path=/api/admin; Max-Age=${age}${secure ? '; Secure' : ''}`);
   const server = createServer(async (req,res) => {
     res.setHeader('X-Content-Type-Options','nosniff'); res.setHeader('X-Frame-Options','DENY'); res.setHeader('Referrer-Policy','same-origin');
     try {
       const url = new URL(req.url,'http://localhost');
       const ip = clientIP(req,trustedProxies);
-      if (req.method === 'POST') {
-        const origin = req.headers.origin;
-        if (origin && new URL(origin).host !== req.headers.host) return json(res,403,{error:'Origin not allowed'});
-        if (req.headers['sec-fetch-site'] === 'cross-site') return json(res,403,{error:'Origin not allowed'});
+      const origin = req.headers.origin;
+      if (url.pathname.startsWith('/api/') && origin) {
+        let sameOrigin = false;
+        try { sameOrigin = new URL(origin).host === req.headers.host; } catch { /* Reject malformed origins. */ }
+        if (!sameOrigin && !allowedOrigins.includes(origin)) return json(res,403,{error:'Frontend origin not allowed. Add the frontend URL to FRONTEND_ORIGINS on the API server.'});
+        res.setHeader('Access-Control-Allow-Origin',origin);
+        res.setHeader('Vary','Origin');
+        res.setHeader('Access-Control-Allow-Methods','GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers','Content-Type, Authorization');
+        res.setHeader('Access-Control-Max-Age','600');
       }
+      if (req.method === 'OPTIONS' && url.pathname.startsWith('/api/')) { res.writeHead(204); return res.end(); }
+      // Cross-site browser calls require an explicitly allowed Origin.
+      if (req.method === 'POST' && req.headers['sec-fetch-site'] === 'cross-site' && !origin) return json(res,403,{error:'Origin required'});
       if (url.pathname === '/api/health') { await store.ping(); return json(res,200,{ok:true,database:'mongodb'}); }
       if (url.pathname === '/api/payment-reports' && req.method === 'POST') {
         if (rateLimit(`reports:${ip}`,60)) return json(res,429,{error:'Too many reports. Please retry in a minute.'});
@@ -91,12 +101,12 @@ export async function createApplication({ mongoUri = process.env.MONGODB_URI, da
         const body = await readBody(req);
         if (!timingSafeEqual(digest(clean(body.password,1024)),passwordHash)) return json(res,401,{error:'Incorrect password'});
         for (const [key,expiry] of sessions) if (expiry < Date.now()) sessions.delete(key);
-        const token = randomBytes(32).toString('hex'); sessions.set(token,Date.now()+8*3600000); setCookie(res,token,28800); return json(res,200,{ok:true});
+        const token = randomBytes(32).toString('hex'); sessions.set(token,Date.now()+8*3600000); setCookie(res,token,28800); return json(res,200,{ok:true,token});
       }
       if (url.pathname.startsWith('/api/admin/')) {
         if (!authorized(req)) return json(res,401,{error:'Admin login required'});
         if (url.pathname === '/api/admin/session') return json(res,200,{ok:true});
-        if (url.pathname === '/api/admin/logout' && req.method === 'POST') { sessions.delete(cookie(req)); setCookie(res,'',0); return json(res,200,{ok:true}); }
+        if (url.pathname === '/api/admin/logout' && req.method === 'POST') { sessions.delete(sessionToken(req)); setCookie(res,'',0); return json(res,200,{ok:true}); }
         if (['/api/admin/reports','/api/admin/export'].includes(url.pathname) && req.method === 'GET') {
           const filter = reportFilter(url);
           if (url.pathname.endsWith('/export')) {
@@ -124,4 +134,5 @@ export async function createApplication({ mongoUri = process.env.MONGODB_URI, da
   });
   return {server,async close(){ if(server.listening) await new Promise(resolve=>server.close(resolve)); await Promise.allSettled([...pending]); await store.close(); }};
 }
+
 
