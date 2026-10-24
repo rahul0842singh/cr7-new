@@ -102,3 +102,14 @@ test('local frontend served on port 3001 can reach the hosted API',async()=>{
   }
  }finally{await app.close();}
 });
+
+test('production frontend domain is allowed and unknown domains remain blocked',async()=>{
+ const app=await start();
+ try {
+  for(const origin of ['https://cr7officialcoinsolana.com','https://www.cr7officialcoinsolana.com']){
+   const response=await fetch(app.url+'/api/admin/login',{method:'OPTIONS',headers:{Origin:origin,'Access-Control-Request-Method':'POST','Access-Control-Request-Headers':'content-type'}});
+   assert.equal(response.status,204);assert.equal(response.headers.get('access-control-allow-origin'),origin);
+  }
+  assert.equal((await fetch(app.url+'/api/admin/session',{headers:{Origin:'https://unrelated.example'}})).status,403);
+ }finally{await app.close();}
+});
