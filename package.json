@@ -1,0 +1,17 @@
+{
+  "name": "cr7-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "CR7 payment report API and MongoDB Atlas dashboard backend",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env.server server/index.mjs",
+    "dev": "node --watch --env-file-if-exists=.env.server server/index.mjs",
+    "setup:admin": "node scripts/setup-admin.mjs",
+    "test": "node --env-file-if-exists=.env.server --test server/app.test.mjs",
+    "test:dashboard": "node --env-file-if-exists=.env.server --test server/app.test.mjs"
+  },
+  "dependencies": { "mongodb": "^7.7.0" },
+  "devDependencies": { "mongodb-memory-server": "^11.3.0" },
+  "engines": { "node": ">=22.13.0" }
+}
